@@ -2500,6 +2500,20 @@ class index_gt {
             && limits.members <= limits_.members)
             return true;
 
+        buffer_gt<context_t, contexts_allocator_t> new_contexts(limits.threads());
+        if (!new_contexts) {
+            return false;
+        }
+
+        // Pre-reserve the capacity for `top_for_refine`, which always contains at most one more
+        // element than the connectivity factors.
+        std::size_t connectivity_max = (std::max)(config_.connectivity_base, config_.connectivity);
+        for (std::size_t i = 0; i != new_contexts.size(); ++i)
+            if (!new_contexts[i].top_for_refine.reserve(connectivity_max + 1))
+                return false;
+
+        contexts_ = std::move(new_contexts);
+
         // In some cases, we don't want to update the number of members,
         // just want to make sure that future reserves use the new thread limits.
         if (!limits.members && !size()) {
@@ -2509,25 +2523,16 @@ class index_gt {
 
         nodes_mutexes_t new_mutexes(limits.members);
         buffer_gt<node_t, nodes_allocator_t> new_nodes(limits.members);
-        buffer_gt<context_t, contexts_allocator_t> new_contexts(limits.threads());
-        if (!new_nodes || !new_contexts || !new_mutexes)
+        if (!new_nodes || !new_mutexes)
             return false;
 
         // Move the nodes info, and deallocate previous buffers.
         if (nodes_)
             std::memcpy(new_nodes.data(), nodes_.data(), sizeof(node_t) * size());
 
-        // Pre-reserve the capacity for `top_for_refine`, which always contains at most one more
-        // element than the connectivity factors.
-        std::size_t connectivity_max = (std::max)(config_.connectivity_base, config_.connectivity);
-        for (std::size_t i = 0; i != new_contexts.size(); ++i)
-            if (!new_contexts[i].top_for_refine.reserve(connectivity_max + 1))
-                return false;
-
         limits_ = limits;
         nodes_capacity_ = limits.members;
         nodes_ = std::move(new_nodes);
-        contexts_ = std::move(new_contexts);
         nodes_mutexes_ = std::move(new_mutexes);
         return true;
     }
